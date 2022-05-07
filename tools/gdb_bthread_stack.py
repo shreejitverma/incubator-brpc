@@ -73,13 +73,29 @@ def get_all_bthreads(total):
     count = 0
     groups = int(gdb.parse_and_eval("'butil::ResourcePool<bthread::TaskMeta>::_ngroup'")["val"])
     for group in range(groups):
-        blocks = int(gdb.parse_and_eval("(*((*((('butil::static_atomic<butil::ResourcePool<bthread::TaskMeta>::BlockGroup*>' *)('butil::ResourcePool<bthread::TaskMeta>::_block_groups')) + {})).val)).nblock._M_i".format(group)))
+        blocks = int(
+            gdb.parse_and_eval(
+                f"(*((*((('butil::static_atomic<butil::ResourcePool<bthread::TaskMeta>::BlockGroup*>' *)('butil::ResourcePool<bthread::TaskMeta>::_block_groups')) + {group})).val)).nblock._M_i"
+            )
+        )
+
         for block in range(blocks):
-            items = int(gdb.parse_and_eval("(*(*(('butil::atomic<butil::ResourcePool<bthread::TaskMeta>::Block*>' *)((*((*((('butil::static_atomic<butil::ResourcePool<bthread::TaskMeta>::BlockGroup*>' *)('butil::ResourcePool<bthread::TaskMeta>::_block_groups')) + {})).val)).blocks) + {}))._M_b._M_p).nitem".format(group, block)))
+            items = int(
+                gdb.parse_and_eval(
+                    f"(*(*(('butil::atomic<butil::ResourcePool<bthread::TaskMeta>::Block*>' *)((*((*((('butil::static_atomic<butil::ResourcePool<bthread::TaskMeta>::BlockGroup*>' *)('butil::ResourcePool<bthread::TaskMeta>::_block_groups')) + {group})).val)).blocks) + {block}))._M_b._M_p).nitem"
+                )
+            )
+
             for item in range(items):
-                task_meta = gdb.parse_and_eval("*(('bthread::TaskMeta' *)((*(*(('butil::atomic<butil::ResourcePool<bthread::TaskMeta>::Block*>' *)((*((*((('butil::static_atomic<butil::ResourcePool<bthread::TaskMeta>::BlockGroup*>' *)('butil::ResourcePool<bthread::TaskMeta>::_block_groups')) + {})).val)).blocks) + {}))._M_b._M_p).items) + {})".format(group, block, item))
+                task_meta = gdb.parse_and_eval(
+                    f"*(('bthread::TaskMeta' *)((*(*(('butil::atomic<butil::ResourcePool<bthread::TaskMeta>::Block*>' *)((*((*((('butil::static_atomic<butil::ResourcePool<bthread::TaskMeta>::BlockGroup*>' *)('butil::ResourcePool<bthread::TaskMeta>::_block_groups')) + {group})).val)).blocks) + {block}))._M_b._M_p).items) + {item})"
+                )
+
                 version_tid = (int(task_meta["tid"]) >> 32)
-                version_butex = gdb.parse_and_eval("*(uint32_t *){}".format(task_meta["version_butex"]))
+                version_butex = gdb.parse_and_eval(
+                    f'*(uint32_t *){task_meta["version_butex"]}'
+                )
+
                 if version_tid == int(version_butex) and int(task_meta["attr"]["stack_type"]) != 0:
                     bthreads.append(task_meta)
                     count += 1
@@ -126,19 +142,22 @@ class BthreadFrameCmd(gdb.Command):
             return
         bthread_id = int(arg)
         if bthread_id >= len(bthreads):
-            print("id {} exceeds max bthread nums {}".format(bthread_id, len(bthreads)))
+            print(f"id {bthread_id} exceeds max bthread nums {len(bthreads)}")
             return
         stack = bthreads[bthread_id]["stack"]
         if str(stack) == "0x0":
             print("this bthread has no stack")
             return
-        context = gdb.parse_and_eval("(*(('bthread::ContextualStack' *){})).context".format(stack))
-        rip = gdb.parse_and_eval("*(uint64_t*)({}+7*8)".format(context))
-        rbp = gdb.parse_and_eval("*(uint64_t*)({}+6*8)".format(context))
-        rsp = gdb.parse_and_eval("{}+8*8".format(context))
-        gdb.parse_and_eval("$rip = {}".format(rip))
-        gdb.parse_and_eval("$rsp = {}".format(rsp))
-        gdb.parse_and_eval("$rbp = {}".format(rbp))
+        context = gdb.parse_and_eval(
+            f"(*(('bthread::ContextualStack' *){stack})).context"
+        )
+
+        rip = gdb.parse_and_eval(f"*(uint64_t*)({context}+7*8)")
+        rbp = gdb.parse_and_eval(f"*(uint64_t*)({context}+6*8)")
+        rsp = gdb.parse_and_eval(f"{context}+8*8")
+        gdb.parse_and_eval(f"$rip = {rip}")
+        gdb.parse_and_eval(f"$rsp = {rsp}")
+        gdb.parse_and_eval(f"$rbp = {rbp}")
 
 class BthreadRegsCmd(gdb.Command):
     """bthread_regs <id>, print bthread registers"""
@@ -156,21 +175,24 @@ class BthreadRegsCmd(gdb.Command):
             return
         bthread_id = int(arg)
         if bthread_id >= len(bthreads):
-            print("id {} exceeds max bthread nums {}".format(bthread_id, len(bthreads)))
+            print(f"id {bthread_id} exceeds max bthread nums {len(bthreads)}")
             return
         stack = bthreads[bthread_id]["stack"]
         if str(stack) == "0x0":
             print("this bthread has no stack")
             return
-        context = gdb.parse_and_eval("(*(('bthread::ContextualStack' *){})).context".format(stack))
-        rip = int(gdb.parse_and_eval("*(uint64_t*)({}+7*8)".format(context)))
-        rbp = int(gdb.parse_and_eval("*(uint64_t*)({}+6*8)".format(context)))
-        rbx = int(gdb.parse_and_eval("*(uint64_t*)({}+5*8)".format(context)))
-        r15 = int(gdb.parse_and_eval("*(uint64_t*)({}+4*8)".format(context)))
-        r14 = int(gdb.parse_and_eval("*(uint64_t*)({}+3*8)".format(context)))
-        r13 = int(gdb.parse_and_eval("*(uint64_t*)({}+2*8)".format(context)))
-        r12 = int(gdb.parse_and_eval("*(uint64_t*)({}+1*8)".format(context)))
-        rsp = int(gdb.parse_and_eval("{}+8*8".format(context)))
+        context = gdb.parse_and_eval(
+            f"(*(('bthread::ContextualStack' *){stack})).context"
+        )
+
+        rip = int(gdb.parse_and_eval(f"*(uint64_t*)({context}+7*8)"))
+        rbp = int(gdb.parse_and_eval(f"*(uint64_t*)({context}+6*8)"))
+        rbx = int(gdb.parse_and_eval(f"*(uint64_t*)({context}+5*8)"))
+        r15 = int(gdb.parse_and_eval(f"*(uint64_t*)({context}+4*8)"))
+        r14 = int(gdb.parse_and_eval(f"*(uint64_t*)({context}+3*8)"))
+        r13 = int(gdb.parse_and_eval(f"*(uint64_t*)({context}+2*8)"))
+        r12 = int(gdb.parse_and_eval(f"*(uint64_t*)({context}+1*8)"))
+        rsp = int(gdb.parse_and_eval(f"{context}+8*8"))
         print("rip: 0x{:x}\nrsp: 0x{:x}\nrbp: 0x{:x}\nrbx: 0x{:x}\nr15: 0x{:x}\nr14: 0x{:x}\nr13: 0x{:x}\nr12: 0x{:x}".format(rip, rsp, rbp, rbx, r15, r14, r13, r12))
 
 class BthreadMetaCmd(gdb.Command):
@@ -189,7 +211,7 @@ class BthreadMetaCmd(gdb.Command):
             return
         bthread_id = int(arg)
         if bthread_id >= len(bthreads):
-            print("id {} exceeds max bthread nums {}".format(bthread_id, len(bthreads)))
+            print(f"id {bthread_id} exceeds max bthread nums {len(bthreads)}")
             return
         print(bthreads[bthread_id])
 
@@ -210,8 +232,14 @@ class BthreadBeginCmd(gdb.Command):
             if num_arg < active_bthreads:
                 scanned_bthreads = num_arg
             else:
-                print("requested bthreads {} more than actived, will display {} bthreads".format(num_arg, scanned_bthreads))
-        print("Active bthreads: {}, will display {} bthreads".format(active_bthreads, scanned_bthreads))
+                print(
+                    f"requested bthreads {num_arg} more than actived, will display {scanned_bthreads} bthreads"
+                )
+
+        print(
+            f"Active bthreads: {active_bthreads}, will display {scanned_bthreads} bthreads"
+        )
+
         get_all_bthreads(scanned_bthreads)
         gdb.parse_and_eval("$saved_rip = $rip")
         gdb.parse_and_eval("$saved_rsp = $rsp")
